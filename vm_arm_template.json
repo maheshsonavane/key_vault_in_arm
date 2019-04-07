@@ -1,0 +1,150 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "adminUsername": {
+            "type": "securestring",
+            "metadata": {
+                "description": "User name for the Virtual Machine."
+            }
+        },
+        "adminPassword": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Password for the Virtual Machine."
+            }
+        },
+        "vmName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name for the Virtual Machine."
+            }
+        },
+        "nicName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name for the Network Interface Card."
+            }
+        },
+        "location": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Location for all resources."
+            }
+        },
+        "requesterID": {
+            "type": "string",
+            "defaultValue": "ekdssrequsterid",
+            "metadata": {
+                "description": "The ID of requester."
+            }
+        },
+        "featureID": {
+            "type": "string",
+            "defaultValue": "ekdssfeatureid",
+            "metadata": {
+                "description": "The Feature ID linked to JIRA."
+            }
+        }
+    },
+    "variables": {
+        "suffix": "[uniqueString(resourceGroup().id, resourceGroup().location)]",
+        "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'salinuxvm')]",
+        "imagePublisher": "RedHat",
+        "imageOffer": "RHEL",
+        "imageSku": "7.5",
+        "addressPrefix": "10.113.0.0/21",
+        "subnetPrefix": "10.113.1.128/25",
+        "storageAccountType": "Standard_LRS",
+        "subnetName": "Subnet_1",
+        "virtualNetworkName": "VNet",
+        "vmSize": "Standard_D32s_v3",
+        "subnetRef": "[resourceId('<resourceGroupName>', 'Microsoft.Network/virtualNetworks/subnets', variables('virtualNetworkName'),  variables('subnetName'))]",
+        "dataDisk1Name": "[concat(parameters('vmName'),'datadisk1')]",
+        "dataDisk2Name": "[concat(parameters('vmName'),'datadisk2')]"
+    },
+    "resources": [
+        {
+            "apiVersion": "2015-06-15",
+            "type": "Microsoft.Network/networkInterfaces",
+            "name": "[parameters('nicName')]",
+            "location": "[parameters('location')]",
+            "tags": {
+                "Requester": "[parameters('requesterID')]",
+                "Feature": "[parameters('featureID')]"
+            },
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "subnet": {
+                                "id": "[variables('subnetRef')]"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "apiVersion": "2016-04-30-preview",
+            "type": "Microsoft.Compute/virtualMachines",
+            "name": "[parameters('vmName')]",
+            "location": "[parameters('location')]",
+            "tags": {
+                "Requester": "[parameters('requesterID')]",
+                "Feature": "[parameters('featureID')]"
+            },
+            "dependsOn": [
+                "[concat('Microsoft.Network/networkInterfaces/', parameters('nicName'))]"
+            ],
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "[variables('vmSize')]"
+                },
+                "osProfile": {
+                    "computerName": "[parameters('vmName')]",
+                    "adminUsername": "[parameters('adminUsername')]",
+                    "adminPassword": "[parameters('adminPassword')]"
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "[variables('imagePublisher')]",
+                        "offer": "[variables('imageOffer')]",
+                        "sku": "[variables('imageSku')]",
+                        "version": "latest"
+                    },
+                    "dataDisks": [
+                        {
+                            "name": "[variables('dataDisk1Name')]",
+                            "diskSizeGB": "512",
+                            "lun": 0,
+                            "createOption": "Empty"
+                        },
+                        {
+                            "name": "[variables('dataDisk2Name')]",
+                            "diskSizeGB": "512",
+                            "lun": 1,
+                            "createOption": "Empty"
+                        }
+                    ]
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces',parameters('nicName'))]"
+                        }
+                    ]
+                }
+            }
+        }
+    ],
+    "outputs": {
+        "networkInterface": {
+            "type": "string",
+            "value": "[reference(concat(parameters('nicName'))).ipConfigurations[0].properties.privateIPAddress]"
+        }
+    }
+}
